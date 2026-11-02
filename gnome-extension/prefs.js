@@ -3,14 +3,11 @@ import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 
+// Generated from ../web/riddle.js by build.sh.
+import MathClock from './riddle.js';
+
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-const LEVELS = [
-  'Easy (1 step, + −)',
-  'Medium (2 steps, + − ×)',
-  'Hard (2–3 steps, all operators)',
-  'Expert (3 steps, all operators)',
-];
 const POSITIONS = [
   ['top-left', 'Top left'],
   ['top-right', 'Top right'],
@@ -37,14 +34,14 @@ export default class MathClockPreferences extends ExtensionPreferences {
     const riddles = new Adw.PreferencesGroup({title: 'Riddles'});
     page.add(riddles);
 
-    const level = new Adw.ComboRow({title: 'Difficulty', model: Gtk.StringList.new(LEVELS)});
+    const level = new Adw.ComboRow({title: 'Difficulty', model: Gtk.StringList.new(Object.values(MathClock.LEVELS).map((l) => l.description))});
     level.selected = settings.get_int('level') - 1;
     level.connect('notify::selected', () => settings.set_int('level', level.selected + 1));
     riddles.add(level);
 
     riddles.add(switchRow(settings, 'twelve-hour', '12-hour clock', 'The hour riddle solves to 1–12 instead of 0–23'));
     riddles.add(
-      switchRow(settings, 'auto-reveal', 'Reveal answers automatically', 'During the last 10 seconds of each minute'),
+      switchRow(settings, 'auto-reveal', 'Reveal answers automatically', `During the last ${MathClock.REVEAL_SECONDS} seconds of each minute`),
     );
 
     const salt = new Adw.EntryRow({title: 'Seed text (optional)'});

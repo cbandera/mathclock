@@ -23,18 +23,18 @@ for (let round = 0; round < 2; round++) {
   // Riddles in the menu evaluate to the current time.
   const now = new Date();
   const val = (t) => Function(`return ${t.replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-')}`)();
-  const h = val(ind._hour.expr.text),
-    m = val(ind._minute.expr.text);
+  const h = val(ind._riddleLines.hour.expr.text),
+    m = val(ind._riddleLines.minute.expr.text);
   console.log(
-    `menu: ${ind._hour.expr.text} ${ind._hour.answer.text} | ${ind._minute.expr.text} ${ind._minute.answer.text}`,
+    `menu: ${ind._riddleLines.hour.expr.text} ${ind._riddleLines.hour.answer.text} | ${ind._riddleLines.minute.expr.text} ${ind._riddleLines.minute.answer.text}`,
   );
   assert.equal(h, now.getHours());
   assert.equal(m, now.getMinutes());
 
   // Manual reveal shows answers in menu and on the desktop.
   ext.setReveal(true);
-  assert.equal(ind._hour.answer.opacity, 255);
-  assert.equal(ext._desktop._hour.answer.opacity, 255);
+  assert.equal(ind._riddleLines.hour.answer.opacity, 255);
+  assert.equal(ext._desktop._riddleLines.hour.answer.opacity, 255);
   assert.equal(ind._revealSwitch.state, true);
   ext.setReveal(false);
 

@@ -13,10 +13,18 @@
   // ("3 × 4 + 5", not "5 + 3 × 4") or, where that is impossible, put in brackets
   // ("20 − (3 × 4)"), so nobody needs to know the precedence rule.
   const LEVELS = {
-    1: {name: 'Easy', ops: [1, 1], operators: ['+', '-'], maxFactor: 10, parens: false},
+    1: {
+      name: 'Easy',
+      description: 'Easy (1 step, + −)',
+      opCount: {min: 1, max: 1},
+      operators: ['+', '-'],
+      maxFactor: 10,
+      parens: false,
+    },
     2: {
       name: 'Medium',
-      ops: [2, 2],
+      description: 'Medium (2 steps, + − ×)',
+      opCount: {min: 2, max: 2},
       operators: ['+', '-', '*'],
       maxFactor: 10,
       parens: false,
@@ -26,7 +34,8 @@
     },
     3: {
       name: 'Hard',
-      ops: [2, 3],
+      description: 'Hard (2–3 steps, all operators)',
+      opCount: {min: 2, max: 3},
       operators: ['+', '-', '*', '/'],
       maxFactor: 12,
       parens: true,
@@ -36,7 +45,8 @@
     },
     4: {
       name: 'Expert',
-      ops: [3, 3],
+      description: 'Expert (3 steps, all operators)',
+      opCount: {min: 3, max: 3},
       operators: ['+', '-', '*', '/'],
       maxFactor: MAX,
       parens: true,
@@ -98,7 +108,7 @@
 
   // Split `value` into [a, b] so that a <op> b === value, or null if impossible.
   // Trivial forms (x+0, x-0, x*1, x/1, x*0, 0/x) are never produced.
-  function split(value, op, cfg, rng) {
+  function split(value, op, levelConfig, rng) {
     switch (op) {
       case '+': {
         if (value < 2 * MIN_ADD) return null;
@@ -112,15 +122,15 @@
       }
       case '*': {
         const pairs = [];
-        for (let f = 2; f <= cfg.maxFactor && f <= value; f++) {
+        for (let f = 2; f <= levelConfig.maxFactor && f <= value; f++) {
           const g = value / f;
-          if (Number.isInteger(g) && g >= 2 && g <= cfg.maxFactor) pairs.push([f, g]);
+          if (Number.isInteger(g) && g >= 2 && g <= levelConfig.maxFactor) pairs.push([f, g]);
         }
         return pairs.length ? pairs[rng.int(0, pairs.length - 1)] : null;
       }
       case '/': {
         if (value < 1) return null;
-        const maxB = Math.min(cfg.maxFactor, Math.floor(MAX / value));
+        const maxB = Math.min(levelConfig.maxFactor, Math.floor(MAX / value));
         if (maxB < 2) return null;
         const b = rng.int(2, maxB);
         return [value * b, b];
@@ -131,22 +141,22 @@
 
   // Grow an expression tree: start with the answer as a single leaf and
   // repeatedly replace a random leaf by an operation that evaluates to it.
-  function attempt(target, cfg, rng) {
-    const nOps = rng.int(cfg.ops[0], cfg.ops[1]);
+  function attempt(target, levelConfig, rng) {
+    const nOps = rng.int(levelConfig.opCount.min, levelConfig.opCount.max);
     const root = {v: target};
     const leaves = [root];
     for (let i = 0; i < nOps; i++) {
       let grown = false;
       // Choose the operator first, then any leaf that can take it, so the
       // weights really steer which operators show up.
-      for (const op of rng.weightedOrder(cfg.operators, cfg.weights)) {
+      for (const op of rng.weightedOrder(levelConfig.operators, levelConfig.weights)) {
         for (const leaf of rng.shuffle(leaves.slice())) {
-          const parts = split(leaf.v, op, cfg, rng);
+          const parts = split(leaf.v, op, levelConfig, rng);
           if (!parts) continue;
           leaf.op = op;
-          leaf.l = {v: parts[0]};
-          leaf.r = {v: parts[1]};
-          leaves.splice(leaves.indexOf(leaf), 1, leaf.l, leaf.r);
+          leaf.left = {v: parts[0]};
+          leaf.right = {v: parts[1]};
+          leaves.splice(leaves.indexOf(leaf), 1, leaf.left, leaf.right);
           grown = true;
           break;
         }
@@ -173,47 +183,47 @@
       return lower || sameRight || pointRight ? `(${s})` : s;
     };
     const sym = ascii ? node.op : SYMBOL[node.op];
-    return `${wrap(node.l, false)} ${sym} ${wrap(node.r, true)}`;
+    return `${wrap(node.left, false)} ${sym} ${wrap(node.right, true)}`;
   }
 
   // Swap the operands of + so the side holding × ÷ is written first ("5 + 3 × 4"
   // becomes "3 × 4 + 5"). − can't be swapped; render() brackets those instead.
   function pointToFront(node) {
     if (!node.op) return;
-    pointToFront(node.l);
-    pointToFront(node.r);
-    if (node.op === '+' && hasOp(node.r, POINT) && !hasOp(node.l, POINT)) {
-      [node.l, node.r] = [node.r, node.l];
+    pointToFront(node.left);
+    pointToFront(node.right);
+    if (node.op === '+' && hasOp(node.right, POINT) && !hasOp(node.left, POINT)) {
+      [node.left, node.right] = [node.right, node.left];
     }
   }
 
-  function acceptable(result, target, cfg) {
+  function acceptable(result, target, levelConfig) {
     // Only brackets forced by precedence count here, not the pointFirst ones.
-    if (!cfg.parens && render(result.root, true).includes('(')) return false;
+    if (!levelConfig.parens && render(result.root, true).includes('(')) return false;
     // Don't give the answer away as one of the operands.
     if (result.leaves.some((l) => l.v === target)) return false;
     // Harder levels must contain at least one of their "interesting" operators.
-    if (cfg.require && !hasOp(result.root, cfg.require)) return false;
+    if (levelConfig.require && !hasOp(result.root, levelConfig.require)) return false;
     return true;
   }
 
   function hasOp(node, ops) {
-    return !!node.op && (ops.includes(node.op) || hasOp(node.l, ops) || hasOp(node.r, ops));
+    return !!node.op && (ops.includes(node.op) || hasOp(node.left, ops) || hasOp(node.right, ops));
   }
 
-  function generate(target, cfg, rng) {
+  function generate(target, levelConfig, rng) {
     for (let i = 0; i < 300; i++) {
-      const r = attempt(target, cfg, rng);
-      if (r && cfg.pointFirst) pointToFront(r.root);
-      if (r && acceptable(r, target, cfg)) return r.root;
+      const r = attempt(target, levelConfig, rng);
+      if (r && levelConfig.pointFirst) pointToFront(r.root);
+      if (r && acceptable(r, target, levelConfig)) return r.root;
     }
     // Rare fallback: relax the rules step by step rather than show nothing.
-    const relaxed = Object.assign({}, cfg, {parens: true, require: null, operators: ['+', '-', '*', '/']});
+    const relaxed = Object.assign({}, levelConfig, {parens: true, require: null, operators: ['+', '-', '*', '/']});
     for (let i = 0; i < 300; i++) {
       const r = attempt(target, relaxed, rng);
       if (r && acceptable(r, target, relaxed)) return r.root;
     }
-    return attempt(target, Object.assign({}, relaxed, {ops: [1, 1]}), rng).root;
+    return attempt(target, Object.assign({}, relaxed, {opCount: {min: 1, max: 1}}), rng).root;
   }
 
   // --- Public API ----------------------------------------------------------
@@ -229,12 +239,43 @@
     );
   }
 
+  // --- Clock rules shared by every front end -------------------------------
+
+  const DEFAULT_LEVEL = 2;
+  const REVEAL_SECONDS = 10; // auto-reveal window at the end of each minute
+
+  function isRevealWindow(seconds) {
+    return seconds >= 60 - REVEAL_SECONDS;
+  }
+
+  // Fraction of the current minute that has elapsed (the bar is full at :59).
+  function progress(seconds) {
+    return (seconds + 1) / 60;
+  }
+
+  // Minutes are zero-padded ("= 05"), hours are not ("= 5").
+  function formatAnswer(value, isMinutes) {
+    return '= ' + (isMinutes ? pad(value) : value);
+  }
+
+  // Coerce loosely-typed settings (URL params, GSettings) into a known-good shape.
+  function normalizeSettings(raw) {
+    raw = raw || {};
+    const level = Number(raw.level);
+    return {
+      level: LEVELS[level] ? level : DEFAULT_LEVEL,
+      twelveHour: !!raw.twelveHour,
+      autoReveal: !!raw.autoReveal,
+      salt: raw.salt == null ? '' : String(raw.salt),
+    };
+  }
+
   function riddle(target, level, seedString) {
-    const cfg = LEVELS[level] || LEVELS[2];
+    const levelConfig = LEVELS[level] || LEVELS[DEFAULT_LEVEL];
     const rng = makeRng(hashString(seedString));
-    const tree = generate(target, cfg, rng);
-    const pf = !!cfg.pointFirst;
-    return {value: target, text: render(tree, false, pf), ascii: render(tree, true, pf)};
+    const tree = generate(target, levelConfig, rng);
+    const pointFirst = !!levelConfig.pointFirst;
+    return {value: target, text: render(tree, false, pointFirst), ascii: render(tree, true, pointFirst)};
   }
 
   /**
@@ -243,7 +284,7 @@
    */
   function riddlesFor(date, opts) {
     opts = opts || {};
-    const level = opts.level || 2;
+    const level = opts.level || DEFAULT_LEVEL;
     const salt = opts.salt || '';
     let hours = date.getHours();
     if (opts.twelveHour) hours = hours % 12 || 12;
@@ -254,7 +295,20 @@
     };
   }
 
-  const api = {LEVELS, MAX, riddle, riddlesFor, hashString, makeRng, render};
+  const api = {
+    LEVELS,
+    MAX,
+    REVEAL_SECONDS,
+    riddle,
+    riddlesFor,
+    hashString,
+    makeRng,
+    render,
+    isRevealWindow,
+    progress,
+    formatAnswer,
+    normalizeSettings,
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MathClock = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

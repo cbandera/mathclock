@@ -165,15 +165,23 @@
         } catch {}
       };
       const state = {
-        level: Number(params.get('level') || load('level', 2)),
-        twelveHour: (params.get('h12') ?? load('h12', '0')) === '1',
-        autoReveal: (params.get('auto') ?? load('auto', '1')) === '1', // show answer in the last 10 s
-        salt: params.get('salt') ?? load('salt', ''), // same salt => same riddles on every device
+        ...MathClock.normalizeSettings({
+          level: params.get('level') || load('level', 2),
+          twelveHour: (params.get('h12') ?? load('h12', '0')) === '1',
+          autoReveal: (params.get('auto') ?? load('auto', '1')) === '1', // show answer in the last 10 s
+          salt: params.get('salt') ?? load('salt', ''), // same salt => same riddles on every device
+        }),
         reveal: false,
       };
       if (params.get('widget') === '1') document.body.classList.add('widget');
 
       const $ = (id) => document.getElementById(id);
+      const clockEl = $('clock');
+      const hourExpr = $('h');
+      const hourAnswer = $('ha');
+      const minuteExpr = $('m');
+      const minuteAnswer = $('ma');
+      const progressBar = $('bar');
       let lastKey = '';
 
       function render() {
@@ -183,14 +191,31 @@
           lastKey = key;
           state.reveal = false;
           const r = MathClock.riddlesFor(now, state);
-          $('h').textContent = r.hours.text;
-          $('m').textContent = r.minutes.text;
-          $('ha').textContent = '= ' + r.hours.value;
-          $('ma').textContent = '= ' + String(r.minutes.value).padStart(2, '0');
+          hourExpr.textContent = r.hours.text;
+          minuteExpr.textContent = r.minutes.text;
+          hourAnswer.textContent = MathClock.formatAnswer(r.hours.value, false);
+          minuteAnswer.textContent = MathClock.formatAnswer(r.minutes.value, true);
         }
         const sec = now.getSeconds();
-        $('bar').style.width = ((sec + 1) / 60) * 100 + '%';
-        $('clock').classList.toggle('reveal', state.reveal || (state.autoReveal && sec >= 50));
+        progressBar.style.width = MathClock.progress(sec) * 100 + '%';
+        clockEl.classList.toggle('reveal', state.reveal || (state.autoReveal && MathClock.isRevealWindow(sec)));
+      }
+
+      // State changes: each updates, persists and refreshes in one place.
+      function setLevel(level) {
+        state.level = level;
+        save('level', level);
+      }
+      function toggleTwelveHour() {
+        state.twelveHour = !state.twelveHour;
+        save('h12', state.twelveHour ? '1' : '0');
+      }
+      function toggleAutoReveal() {
+        state.autoReveal = !state.autoReveal;
+        save('auto', state.autoReveal ? '1' : '0');
+      }
+      function toggleReveal() {
+        state.reveal = !state.reveal;
       }
 
       function buildControls() {
@@ -208,20 +233,11 @@
           };
           c.appendChild(b);
         };
-        for (const [n, cfg] of Object.entries(MathClock.LEVELS)) {
-          btn(`${n} ${cfg.name}`, state.level === Number(n), () => {
-            state.level = Number(n);
-            save('level', n);
-          });
+        for (const [n, levelConfig] of Object.entries(MathClock.LEVELS)) {
+          btn(`${n} ${levelConfig.name}`, state.level === Number(n), () => setLevel(Number(n)));
         }
-        btn(state.twelveHour ? '12h' : '24h', false, () => {
-          state.twelveHour = !state.twelveHour;
-          save('h12', state.twelveHour ? '1' : '0');
-        });
-        btn('Auto-reveal', state.autoReveal, () => {
-          state.autoReveal = !state.autoReveal;
-          save('auto', state.autoReveal ? '1' : '0');
-        });
+        btn(state.twelveHour ? '12h' : '24h', false, toggleTwelveHour);
+        btn('Auto-reveal', state.autoReveal, toggleAutoReveal);
       }
 
       // Show controls while the mouse moves; hide after 3 s idle.
@@ -232,20 +248,18 @@
         idle = setTimeout(() => document.body.classList.remove('active'), 3000);
       });
       document.addEventListener('click', () => {
-        state.reveal = !state.reveal;
+        toggleReveal();
         render();
       });
       document.addEventListener('keydown', (e) => {
         if (e.key === ' ') {
-          state.reveal = !state.reveal;
+          toggleReveal();
           e.preventDefault();
         } else if (MathClock.LEVELS[e.key]) {
-          state.level = Number(e.key);
-          save('level', e.key);
+          setLevel(Number(e.key));
           buildControls();
         } else if (e.key === 't') {
-          state.twelveHour = !state.twelveHour;
-          save('h12', state.twelveHour ? '1' : '0');
+          toggleTwelveHour();
           buildControls();
         } else return;
         render();

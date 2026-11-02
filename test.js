@@ -1,6 +1,19 @@
 // Exhaustive check: every hour/minute value at every level, many seeds.
 // Run with: node test.js
-const {riddle, LEVELS} = require('./web/riddle.js');
+const assert = require('node:assert/strict');
+const {riddle, LEVELS, isRevealWindow, progress, formatAnswer, normalizeSettings} = require('./web/riddle.js');
+
+// Shared clock rules
+assert.equal(isRevealWindow(49), false);
+assert.equal(isRevealWindow(50), true);
+assert.equal(isRevealWindow(59), true);
+assert.equal(progress(0), 1 / 60);
+assert.equal(progress(59), 1);
+assert.equal(formatAnswer(5, true), '= 05');
+assert.equal(formatAnswer(5, false), '= 5');
+assert.equal(normalizeSettings({level: 9}).level, 2);
+assert.equal(normalizeSettings({level: '3'}).level, 3);
+assert.equal(normalizeSettings().salt, '');
 
 let failures = 0;
 const stats = {};

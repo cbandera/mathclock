@@ -11,7 +11,6 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 // Generated from ../web/riddle.js by build.sh, so browser and extension share one generator.
 import MathClock from './riddle.js';
 
-const REVEAL_SECONDS = 10; // auto-reveal window at the end of each minute
 const DESKTOP_MARGIN = 48;
 
 // "H  2 × 2 + 15  = 19": a small label, the riddle, and its (hidden) answer.
@@ -30,14 +29,45 @@ function makeLine(labelText, styleClass) {
   return {box, label, expr, answer};
 }
 
-function fillLine(line, riddle, pad) {
-  line.expr.text = riddle.text;
-  line.answer.text = `= ${pad ? String(riddle.value).padStart(2, '0') : riddle.value}`;
+// The top bar uses a compact form: "2×2+15 : 5+10×5".
+function toPanelText(text) {
+  return text.replaceAll(' ', '');
 }
 
-// The top bar uses a compact form: "2×2+15 : 5+10×5".
-function compact(text) {
-  return text.replaceAll(' ', '');
+// The hour line and the minute line, shared by the menu and the desktop clock.
+class RiddleLines {
+  constructor(styleClass) {
+    this.hour = makeLine('H', styleClass);
+    this.minute = makeLine('M', styleClass);
+    this._revealed = false;
+  }
+
+  get lines() {
+    return [this.hour, this.minute];
+  }
+
+  fill(riddles) {
+    this.hour.expr.text = riddles.hours.text;
+    this.hour.answer.text = MathClock.formatAnswer(riddles.hours.value, false);
+    this.minute.expr.text = riddles.minutes.text;
+    this.minute.answer.text = MathClock.formatAnswer(riddles.minutes.value, true);
+  }
+
+  setRevealed(revealed, {animate = false} = {}) {
+    if (revealed === this._revealed) return;
+    this._revealed = revealed;
+    for (const {answer} of this.lines) {
+      if (animate) {
+        answer.ease({
+          opacity: revealed ? 255 : 0,
+          duration: 400,
+          mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+      } else {
+        answer.opacity = revealed ? 255 : 0;
+      }
+    }
+  }
 }
 
 const MathClockIndicator = GObject.registerClass(
@@ -59,10 +89,8 @@ const MathClockIndicator = GObject.registerClass(
         style_class: 'mathclock-menu-box',
         x_expand: true,
       });
-      this._hour = makeLine('H', 'mathclock-menu');
-      this._minute = makeLine('M', 'mathclock-menu');
-      box.add_child(this._hour.box);
-      box.add_child(this._minute.box);
+      this._riddleLines = new RiddleLines('mathclock-menu');
+      for (const line of this._riddleLines.lines) box.add_child(line.box);
       riddleItem.add_child(box);
       this.menu.addMenuItem(riddleItem);
 
@@ -87,10 +115,9 @@ const MathClockIndicator = GObject.registerClass(
     }
 
     update(riddles, reveal, manualReveal, level) {
-      this._label.text = `${compact(riddles.hours.text)} : ${compact(riddles.minutes.text)}`;
-      fillLine(this._hour, riddles.hours, false);
-      fillLine(this._minute, riddles.minutes, true);
-      this._hour.answer.opacity = this._minute.answer.opacity = reveal ? 255 : 0;
+      this._label.text = `${toPanelText(riddles.hours.text)} : ${toPanelText(riddles.minutes.text)}`;
+      this._riddleLines.fill(riddles);
+      this._riddleLines.setRevealed(reveal);
       this._revealSwitch.setToggleState(manualReveal);
       this._levelMenu.label.text = `Difficulty: ${MathClock.LEVELS[level].name}`;
       for (const [n, item] of this._levelItems)
@@ -114,9 +141,8 @@ class DesktopClock {
       reactive: true,
     });
 
-    this._hour = makeLine('H', 'mathclock-desktop');
-    this._minute = makeLine('M', 'mathclock-desktop');
-    for (const line of [this._hour, this._minute]) {
+    this._riddleLines = new RiddleLines('mathclock-desktop');
+    for (const line of this._riddleLines.lines) {
       line.box.style = `spacing: ${Math.round(size * 0.4)}px;`;
       line.box.x_align = alignRight ? Clutter.ActorAlign.END : Clutter.ActorAlign.START;
       line.label.style = `font-size: ${Math.round(size * 0.3)}px;`;
@@ -144,7 +170,6 @@ class DesktopClock {
     const group = Main.layoutManager._backgroundGroup;
     group.add_child(this.actor);
     group.set_child_above_sibling(this.actor, null);
-    this._revealed = false;
   }
 
   _place() {
@@ -164,18 +189,8 @@ class DesktopClock {
   }
 
   update(riddles, reveal, progress) {
-    fillLine(this._hour, riddles.hours, false);
-    fillLine(this._minute, riddles.minutes, true);
-    if (reveal !== this._revealed) {
-      this._revealed = reveal;
-      for (const answer of [this._hour.answer, this._minute.answer]) {
-        answer.ease({
-          opacity: reveal ? 255 : 0,
-          duration: 400,
-          mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
-      }
-    }
+    this._riddleLines.fill(riddles);
+    this._riddleLines.setRevealed(reveal, {animate: true});
     this._fill.width = Math.round(this._track.width * progress);
   }
 
@@ -220,10 +235,7 @@ export default class MathClockExtension extends Extension {
       this._indicator = new MathClockIndicator(this);
       Main.panel.addToStatusArea(this.uuid, this._indicator, 0, replaceClock ? 'center' : 'right');
     }
-    if (replaceClock) {
-      Main.panel.statusArea.dateMenu.container.hide();
-      this._clockHidden = true;
-    }
+    if (replaceClock) this._setSystemClockVisible(false);
     if (this.settings.get_boolean('show-on-desktop')) this._desktop = new DesktopClock(this);
 
     this._lastKey = null;
@@ -235,17 +247,24 @@ export default class MathClockExtension extends Extension {
     this._indicator = null;
     this._desktop?.destroy();
     this._desktop = null;
-    if (this._clockHidden) {
-      Main.panel.statusArea.dateMenu.container.show();
-      this._clockHidden = false;
-    }
+    if (this._clockHidden) this._setSystemClockVisible(true);
+  }
+
+  _setSystemClockVisible(visible) {
+    const container = Main.panel.statusArea.dateMenu.container;
+    if (visible) container.show();
+    else container.hide();
+    this._clockHidden = !visible;
   }
 
   _tick() {
     const now = new Date();
-    const level = this.settings.get_int('level');
-    const twelveHour = this.settings.get_boolean('twelve-hour');
-    const salt = this.settings.get_string('salt');
+    const {level, twelveHour, autoReveal, salt} = MathClock.normalizeSettings({
+      level: this.settings.get_int('level'),
+      twelveHour: this.settings.get_boolean('twelve-hour'),
+      autoReveal: this.settings.get_boolean('auto-reveal'),
+      salt: this.settings.get_string('salt'),
+    });
 
     // New riddles once per minute (or straight away after a settings change).
     const key = `${now.getHours()}:${now.getMinutes()}`;
@@ -256,10 +275,9 @@ export default class MathClockExtension extends Extension {
     }
 
     const seconds = now.getSeconds();
-    const autoReveal = this.settings.get_boolean('auto-reveal') && seconds >= 60 - REVEAL_SECONDS;
-    const reveal = this.manualReveal || autoReveal;
+    const reveal = this.manualReveal || (autoReveal && MathClock.isRevealWindow(seconds));
 
     this._indicator?.update(this._riddles, reveal, this.manualReveal, level);
-    this._desktop?.update(this._riddles, reveal, (seconds + 1) / 60);
+    this._desktop?.update(this._riddles, reveal, MathClock.progress(seconds));
   }
 }
