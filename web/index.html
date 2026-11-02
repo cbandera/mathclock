@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Math Clock</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --fg: #e8e6e1;
+        --muted: #6b7079;
+        --accent: #f2b544;
+        --bar: #262a33;
+      }
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme='dark']) {
+          --bg: #f5f3ee;
+          --fg: #1d1f24;
+          --muted: #8a8d93;
+          --accent: #c27c0e;
+          --bar: #e2dfd8;
+        }
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: 'JetBrains Mono', 'Ubuntu Mono', ui-monospace, monospace;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        cursor: default;
+        user-select: none;
+      }
+      body.widget {
+        background: transparent;
+      }
+      body.widget .fork {
+        display: none;
+      }
+      .fork {
+        position: fixed;
+        top: 10px;
+        right: 12px;
+        font-size: 12px;
+        color: var(--muted);
+        text-decoration: none;
+        opacity: 0.7;
+        transition: opacity 0.3s;
+      }
+      .fork:hover,
+      .fork:focus-visible {
+        opacity: 1;
+        color: var(--accent);
+      }
+      .clock {
+        display: grid;
+        gap: 0.35em;
+        font-size: clamp(20px, 7vw, 88px);
+        padding: 0 16px;
+      }
+      .line {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5em;
+        white-space: nowrap;
+      }
+      .label {
+        font-size: 0.3em;
+        color: var(--muted);
+        width: 1.4em;
+        text-align: right;
+        letter-spacing: 0.1em;
+      }
+      .expr {
+        font-variant-numeric: tabular-nums;
+        transition: opacity 0.4s;
+      }
+      .answer {
+        color: var(--accent);
+        opacity: 0;
+        transition: opacity 0.4s;
+      }
+      .reveal .answer {
+        opacity: 1;
+      }
+      .progress {
+        height: 3px;
+        background: var(--bar);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 0.4em;
+      }
+      .progress > div {
+        height: 100%;
+        background: var(--accent);
+        width: 0;
+        transition: width 1s linear;
+      }
+      .controls {
+        position: fixed;
+        bottom: 12px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 0 16px;
+        font-size: 13px;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      body.active .controls {
+        opacity: 1;
+      }
+      button {
+        font: inherit;
+        color: var(--fg);
+        background: var(--bar);
+        border: 0;
+        border-radius: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      button[aria-pressed='true'] {
+        background: var(--accent);
+        color: var(--bg);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="clock" id="clock" title="Click or press space to reveal">
+      <div class="line">
+        <span class="label">H</span><span class="expr" id="h"></span><span class="answer" id="ha"></span>
+      </div>
+      <div class="line">
+        <span class="label">M</span><span class="expr" id="m"></span><span class="answer" id="ma"></span>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+    </main>
+
+    <a class="fork" href="https://github.com/cbandera/mathclock" target="_blank" rel="noopener">Fork me on GitHub</a>
+
+    <nav class="controls" id="controls"></nav>
+
+    <script src="riddle.js"></script>
+    <script>
+      // Settings: URL params override saved prefs, e.g. index.html?level=3&widget=1
+      const params = new URLSearchParams(location.search);
+      const load = (k, d) => {
+        try {
+          return localStorage.getItem('mc.' + k) ?? d;
+        } catch {
+          return d;
+        }
+      };
+      const save = (k, v) => {
+        try {
+          localStorage.setItem('mc.' + k, v);
+        } catch {}
+      };
+      const state = {
+        level: Number(params.get('level') || load('level', 2)),
+        twelveHour: (params.get('h12') ?? load('h12', '0')) === '1',
+        autoReveal: (params.get('auto') ?? load('auto', '1')) === '1', // show answer in the last 10 s
+        salt: params.get('salt') ?? load('salt', ''), // same salt => same riddles on every device
+        reveal: false,
+      };
+      if (params.get('widget') === '1') document.body.classList.add('widget');
+
+      const $ = (id) => document.getElementById(id);
+      let lastKey = '';
+
+      function render() {
+        const now = new Date();
+        const key = `${now.getHours()}:${now.getMinutes()}|${state.level}|${state.twelveHour}`;
+        if (key !== lastKey) {
+          lastKey = key;
+          state.reveal = false;
+          const r = MathClock.riddlesFor(now, state);
+          $('h').textContent = r.hours.text;
+          $('m').textContent = r.minutes.text;
+          $('ha').textContent = '= ' + r.hours.value;
+          $('ma').textContent = '= ' + String(r.minutes.value).padStart(2, '0');
+        }
+        const sec = now.getSeconds();
+        $('bar').style.width = ((sec + 1) / 60) * 100 + '%';
+        $('clock').classList.toggle('reveal', state.reveal || (state.autoReveal && sec >= 50));
+      }
+
+      function buildControls() {
+        const c = $('controls');
+        c.innerHTML = '';
+        const btn = (label, pressed, onClick) => {
+          const b = document.createElement('button');
+          b.textContent = label;
+          b.setAttribute('aria-pressed', pressed);
+          b.onclick = (e) => {
+            e.stopPropagation();
+            onClick();
+            buildControls();
+            render();
+          };
+          c.appendChild(b);
+        };
+        for (const [n, cfg] of Object.entries(MathClock.LEVELS)) {
+          btn(`${n} ${cfg.name}`, state.level === Number(n), () => {
+            state.level = Number(n);
+            save('level', n);
+          });
+        }
+        btn(state.twelveHour ? '12h' : '24h', false, () => {
+          state.twelveHour = !state.twelveHour;
+          save('h12', state.twelveHour ? '1' : '0');
+        });
+        btn('Auto-reveal', state.autoReveal, () => {
+          state.autoReveal = !state.autoReveal;
+          save('auto', state.autoReveal ? '1' : '0');
+        });
+      }
+
+      // Show controls while the mouse moves; hide after 3 s idle.
+      let idle;
+      document.addEventListener('mousemove', () => {
+        document.body.classList.add('active');
+        clearTimeout(idle);
+        idle = setTimeout(() => document.body.classList.remove('active'), 3000);
+      });
+      document.addEventListener('click', () => {
+        state.reveal = !state.reveal;
+        render();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === ' ') {
+          state.reveal = !state.reveal;
+          e.preventDefault();
+        } else if (MathClock.LEVELS[e.key]) {
+          state.level = Number(e.key);
+          save('level', e.key);
+          buildControls();
+        } else if (e.key === 't') {
+          state.twelveHour = !state.twelveHour;
+          save('h12', state.twelveHour ? '1' : '0');
+          buildControls();
+        } else return;
+        render();
+      });
+
+      buildControls();
+      render();
+      setInterval(render, 1000);
+    </script>
+  </body>
+</html>

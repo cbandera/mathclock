@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <enum id="org.gnome.shell.extensions.mathclock.position">
+    <value nick="top-left" value="0"/>
+    <value nick="top-right" value="1"/>
+    <value nick="bottom-left" value="2"/>
+    <value nick="bottom-right" value="3"/>
+    <value nick="center" value="4"/>
+  </enum>
+
+  <schema id="org.gnome.shell.extensions.mathclock" path="/org/gnome/shell/extensions/mathclock/">
+    <key name="level" type="i">
+      <range min="1" max="4"/>
+      <default>2</default>
+      <summary>Difficulty level (1 Easy … 4 Expert)</summary>
+    </key>
+    <key name="twelve-hour" type="b">
+      <default>false</default>
+      <summary>Use a 12-hour clock for the hour riddle</summary>
+    </key>
+    <key name="auto-reveal" type="b">
+      <default>true</default>
+      <summary>Show the answers during the last 10 seconds of each minute</summary>
+    </key>
+    <key name="salt" type="s">
+      <default>''</default>
+      <summary>Extra seed text; devices with the same salt show the same riddles</summary>
+    </key>
+    <key name="show-in-panel" type="b">
+      <default>true</default>
+      <summary>Show the riddles in the top bar</summary>
+    </key>
+    <key name="hide-system-clock" type="b">
+      <default>false</default>
+      <summary>Hide the normal top bar clock and put the riddles in its place</summary>
+    </key>
+    <key name="show-on-desktop" type="b">
+      <default>true</default>
+      <summary>Show a large riddle clock on the desktop background</summary>
+    </key>
+    <key name="desktop-position" enum="org.gnome.shell.extensions.mathclock.position">
+      <default>'top-right'</default>
+      <summary>Where the desktop clock sits on the primary monitor</summary>
+    </key>
+    <key name="desktop-font-size" type="i">
+      <range min="16" max="200"/>
+      <default>56</default>
+      <summary>Font size of the desktop clock in pixels</summary>
+    </key>
+  </schema>
+</schemalist>

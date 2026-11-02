@@ -1,0 +1,265 @@
+<title>Math Clock</title>
+<meta name="claude:viewport-fit-sides" content="cover" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" />
+<style>
+  /* Layout: one centred clock face, two riddle lines, a minute progress rule; controls appear on interaction. */
+  :root {
+    --bg: #0f1115;
+    --fg: #e8e6e1;
+    --muted: #6b7079;
+    --accent: #f2b544;
+    --bar: #262a33;
+    --mono: 'JetBrains Mono', 'Ubuntu Mono', ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme='dark']) {
+      --bg: #f5f3ee;
+      --fg: #1d1f24;
+      --muted: #85888f;
+      --accent: #b06f08;
+      --bar: #e2dfd8;
+      color-scheme: light;
+    }
+  }
+  :root[data-theme='light'] {
+    --bg: #f5f3ee;
+    --fg: #1d1f24;
+    --muted: #85888f;
+    --accent: #b06f08;
+    --bar: #e2dfd8;
+    color-scheme: light;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--mono);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    user-select: none;
+    cursor: default;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    box-sizing: border-box;
+  }
+  .clock {
+    display: grid;
+    gap: 0.35em;
+    font-size: clamp(18px, 6vw, 88px);
+    max-width: 100%;
+  }
+  .line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5em;
+    white-space: nowrap;
+  }
+  .label {
+    font-size: 0.3em;
+    color: var(--muted);
+    width: 1.4em;
+    text-align: right;
+    letter-spacing: 0.12em;
+  }
+  .expr {
+    font-variant-numeric: tabular-nums;
+  }
+  .answer {
+    color: var(--accent);
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .reveal .answer {
+    opacity: 1;
+  }
+  .progress {
+    height: 3px;
+    background: var(--bar);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 0.4em;
+  }
+  .progress > div {
+    height: 100%;
+    background: var(--accent);
+    width: 0;
+    transition: width 1s linear;
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 1.2em;
+    letter-spacing: 0.04em;
+  }
+  .controls {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px))
+      max(16px, env(safe-area-inset-left, 0px));
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  body.active .controls,
+  .controls:focus-within {
+    opacity: 1;
+  }
+  button {
+    font: inherit;
+    color: var(--fg);
+    background: var(--bar);
+    border: 0;
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  button[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .answer,
+    .progress > div,
+    .controls {
+      transition: none;
+    }
+  }
+</style>
+
+<main class="clock" id="clock">
+  <div class="line">
+    <span class="label">H</span><span class="expr" id="h"></span><span class="answer" id="ha"></span>
+  </div>
+  <div class="line">
+    <span class="label">M</span><span class="expr" id="m"></span><span class="answer" id="ma"></span>
+  </div>
+  <div class="progress"><div id="bar"></div></div>
+  <p class="hint">Tap or press space to show the answer · keys 1–4 set difficulty</p>
+</main>
+
+<nav class="controls" id="controls" aria-label="Clock settings"></nav>
+
+<script src="riddle.js"></script>
+<script>
+  const load = (k, d) => {
+    try {
+      return localStorage.getItem('mc.' + k) ?? d;
+    } catch {
+      return d;
+    }
+  };
+  const save = (k, v) => {
+    try {
+      localStorage.setItem('mc.' + k, v);
+    } catch {}
+  };
+  const state = {
+    level: Number(load('level', 2)),
+    twelveHour: load('h12', '0') === '1',
+    autoReveal: load('auto', '1') === '1', // show answer in the last 10 s of each minute
+    salt: '',
+    reveal: false,
+  };
+
+  const $ = (id) => document.getElementById(id);
+  let lastKey = '';
+
+  function render() {
+    const now = new Date();
+    const key = `${now.getHours()}:${now.getMinutes()}|${state.level}|${state.twelveHour}`;
+    if (key !== lastKey) {
+      lastKey = key;
+      state.reveal = false;
+      const r = MathClock.riddlesFor(now, state);
+      $('h').textContent = r.hours.text;
+      $('m').textContent = r.minutes.text;
+      $('ha').textContent = '= ' + r.hours.value;
+      $('ma').textContent = '= ' + String(r.minutes.value).padStart(2, '0');
+    }
+    const sec = now.getSeconds();
+    $('bar').style.width = ((sec + 1) / 60) * 100 + '%';
+    $('clock').classList.toggle('reveal', state.reveal || (state.autoReveal && sec >= 50));
+  }
+
+  function buildControls() {
+    const c = $('controls');
+    c.innerHTML = '';
+    const btn = (label, pressed, onClick) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.setAttribute('aria-pressed', pressed);
+      b.onclick = (e) => {
+        e.stopPropagation();
+        onClick();
+        buildControls();
+        render();
+      };
+      c.appendChild(b);
+    };
+    for (const [n, cfg] of Object.entries(MathClock.LEVELS)) {
+      btn(`${n} ${cfg.name}`, state.level === Number(n), () => {
+        state.level = Number(n);
+        save('level', n);
+      });
+    }
+    btn(state.twelveHour ? '12h' : '24h', false, () => {
+      state.twelveHour = !state.twelveHour;
+      save('h12', state.twelveHour ? '1' : '0');
+    });
+    btn('Auto-reveal', state.autoReveal, () => {
+      state.autoReveal = !state.autoReveal;
+      save('auto', state.autoReveal ? '1' : '0');
+    });
+  }
+
+  // Show controls on any pointer activity; hide after 3 s idle.
+  let idle;
+  const wake = () => {
+    document.body.classList.add('active');
+    clearTimeout(idle);
+    idle = setTimeout(() => document.body.classList.remove('active'), 3000);
+  };
+  document.addEventListener('pointermove', wake);
+  document.addEventListener('pointerdown', wake);
+  document.addEventListener('click', () => {
+    state.reveal = !state.reveal;
+    render();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ' && e.target === document.body) {
+      state.reveal = !state.reveal;
+      e.preventDefault();
+    } else if (MathClock.LEVELS[e.key]) {
+      state.level = Number(e.key);
+      save('level', e.key);
+      buildControls();
+    } else if (e.key === 't') {
+      state.twelveHour = !state.twelveHour;
+      save('h12', state.twelveHour ? '1' : '0');
+      buildControls();
+    } else return;
+    render();
+  });
+
+  buildControls();
+  render();
+  setInterval(render, 1000);
+</script>

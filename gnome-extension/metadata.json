@@ -1,0 +1,9 @@
+{
+  "uuid": "mathclock@cbandera.github.io",
+  "name": "Math Clock",
+  "description": "Shows the time as two small arithmetic riddles: one for the hour, one for the minutes. In the top bar, on the desktop, or both.",
+  "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.mathclock",
+  "url": "https://github.com/cbandera/mathclock",
+  "version-name": "0.1"
+}

@@ -1,0 +1,5 @@
+.DS_Store
+
+# Build output (gnome-extension/build.sh)
+gnome-extension/dist/
+gnome-extension/riddle.js

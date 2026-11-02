@@ -1,0 +1,52 @@
+/* Top bar */
+.mathclock-panel-label {
+  font-family: monospace;
+  font-feature-settings: 'tnum';
+}
+
+/* Menu */
+.mathclock-menu-box {
+  spacing: 6px;
+  padding: 6px 4px;
+}
+.mathclock-menu-line {
+  spacing: 14px;
+}
+.mathclock-menu-label {
+  font-size: 9pt;
+  color: #8a8d93;
+  min-width: 14px;
+}
+.mathclock-menu-expr,
+.mathclock-menu-answer {
+  font-family: monospace;
+  font-size: 20pt;
+}
+.mathclock-menu-answer {
+  font-weight: bold;
+  color: #f2b544;
+}
+
+/* Desktop widget (font size and spacing are set inline from the settings) */
+.mathclock-desktop {
+  font-family: monospace;
+  color: #f4f2ee;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+}
+.mathclock-desktop-label {
+  color: rgba(244, 242, 238, 0.6);
+}
+.mathclock-desktop-answer {
+  color: #f2b544;
+  font-weight: bold;
+}
+.mathclock-desktop-track {
+  height: 3px;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.22);
+}
+.mathclock-desktop-fill {
+  height: 3px;
+  border-radius: 2px;
+  background-color: #f2b544;
+}
