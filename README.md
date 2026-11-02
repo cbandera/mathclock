@@ -42,7 +42,6 @@ URL parameters override settings saved in the browser (`localStorage`), for exam
 ### Files
 
 - `web/`: the static site (`index.html` and `riddle.js`). `riddle.js` is a plain script usable from a browser (`MathClock` global) and Node (`require`).
-- `artifact/mathclock.html`: a variant of the page for publishing as a claude.ai artifact. It loads `riddle.js` from its own directory, so publish `web/riddle.js` next to it. It has no URL parameters.
 - `gnome-extension/`: the GNOME Shell extension, described below.
 - `test.js`: the riddle-generator check.
 
